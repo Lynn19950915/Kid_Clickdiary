@@ -1,0 +1,5 @@
+open ***
+user ***
+password ***
+prompt
+bye

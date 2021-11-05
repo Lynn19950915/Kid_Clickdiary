@@ -1,0 +1,73 @@
+require(pacman)
+{p_load(MASS,
+        # Data Processing
+        data.table, magrittr, dplyr, stringr, jsonlite,
+        # Time, Database
+        zoo, chron, RMySQL
+)}
+
+
+# Input: 檔案路徑搜取
+args=commandArgs(TRUE)
+# project_id=args[1]
+# filepath=args[2]
+project_id="102"
+filepath="102.csv"
+path=paste0('C:/***', '/', filepath)
+
+data=fread(path, encoding='UTF-8')
+data_qindex=data[,c("q_id","q_sn")] %>% distinct　#對每個大題+小題取unique
+data_qindex %<>% na.omit()                        #移除空白列
+ls_output = list() 
+
+
+for(i in 1:nrow(data_qindex)){
+  data_tmp=data[q_id==data_qindex[i]$q_id & q_sn==data_qindex[i]$q_sn]
+  data_tmp %<>% lapply(function(x) replace(x, is.na(x), ''))
+
+  ls_tmp=list()
+  ls_tmp$q_id=data_qindex[i]$q_id
+  ls_tmp$q_sn=data_qindex[i]$q_sn
+  ls_tmp$q_txt=data_tmp$q_txt %>% unique              #unique: 表示同組題中參數不改變
+  ls_tmp$type=data_tmp$type %>% unique
+  ls_tmp$opt_txt=trimws(data_tmp$opt_txt)
+  ls_tmp$opt_value=data_tmp$opt_value
+  ls_tmp$escape=data_tmp$escape
+  
+  if(data_tmp$target_former %>% n_distinct()>1){
+    ls_tmp$target_former=data_tmp$target_former
+  }else if(data_tmp$target_former %>% unique()==""){
+    ls_tmp$target_former=data_tmp$target_former %>% unique
+  }else{
+    ls_tmp$target_former=data_tmp$target_former  
+  }
+  if(data_tmp$target %>% n_distinct()>1){
+    ls_tmp$target=data_tmp$target
+  }else if(data_tmp$target %>% unique()==""){
+    ls_tmp$target=data_tmp$target %>% unique
+  }else{
+    ls_tmp$target=data_tmp$target 
+  }
+  
+  ls_tmp$annotate=data_tmp$annotate %>% unique
+  ls_tmp$note=data_tmp$note
+  ls_tmp$range_min=data_tmp$range_min %>% unique
+  ls_tmp$range_max=data_tmp$range_max %>% unique
+  ls_tmp$escaped_code=data_tmp$escaped_code %>% unique
+  ls_tmp$special_code=data_tmp$special_code %>% unique
+  
+  if(data_tmp$disjoint %>% n_distinct()>1){
+    ls_tmp$disjoint=data_tmp$disjoint
+  }else if(data_tmp$disjoint %>% unique()==""){
+    ls_tmp$disjoint=data_tmp$disjoint %>% unique  
+  }else{
+    ls_tmp$disjoint=data_tmp$disjoint
+  }
+  
+  ls_output[[i]]=ls_tmp
+}
+json_output=ls_output %>% toJSON(auto_unbox=T, pretty=T)
+
+connect<-dbConnect(dbDriver("MySQL"), host="***", user="***", password="***", dbname="***")
+dbSendQuery(connect, 'SET NAMES UTF8')
+paste0("UPDATE `project` SET `csv_schema`='", json_output, "'WHERE `project_id`='", project_id, "'") %>% dbSendQuery(connect,.)
